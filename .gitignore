@@ -1,0 +1,21 @@
+# deps / build
+node_modules/
+.next/
+dist/
+
+# env
+.env*
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# editores
+.vscode/
+.idea/
+*.swp
