@@ -7,6 +7,9 @@ dist/
 .env*
 !.env.example
 
+# supabase local state
+supabase/.temp
+
 # macOS
 .DS_Store
 
