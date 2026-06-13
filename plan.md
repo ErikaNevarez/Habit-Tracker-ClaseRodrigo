@@ -215,7 +215,7 @@ npx create-next-app@latest habit-tracker --typescript --tailwind --app --src-dir
 **Descripción:** Agregar botón "Archivar" en `/habito/[id]` que hace `UPDATE habits SET archived_at = now()`. Crear `src/app/archivados/page.tsx` listando hábitos con `archived_at IS NOT NULL`, con botón "Desarchivar" que hace `UPDATE habits SET archived_at = null`. En la lógica de toggle (T-15), agregar validación: si el hábito tiene `archived_at IS NOT NULL`, rechazar con error 400.
 **Dependencias:** T-18
 **ADR:** 0001 (archived_at = soft-delete reversible)
-**Criterio de hecho:** Archivar quita el hábito de `/` y lo muestra en `/archivados`. Desarchivar lo devuelve a `/` y acepta toggles. Intentar toggle en hábito archivado vía petición directa al endpoint devuelve 400. `tsc --noEmit` pasa.
+**Criterio de hecho:** Archivar quita el hábito de `/` y lo muestra en `/archivados`. Desarchivar lo devuelve a `/` y acepta toggles. En `/archivados` no existe interfaz de toggle — solo el botón "Desarchivar" (verificar que no hay `ToggleCheck` en el DOM). `tsc --noEmit` pasa.
 **Prueba manual:** PT-15, PT-16, PT-17
 
 ---

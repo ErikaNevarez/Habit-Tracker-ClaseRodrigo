@@ -140,6 +140,8 @@ El ADR 0001 descartó middleware como mecanismo de *validación de autorizacione
 
 ### Hallazgo 6 — criterio de T-19 presupone API route
 
-**Estado:** no se corrige en esta iteración. El usuario no aprobó acción sobre este hallazgo. Queda como deuda conocida para el implementer.
+**Acción:** reescritura del criterio de hecho de T-19.
+**Problema:** "petición directa al endpoint devuelve 400" presupone un API Route de Next.js que no existe en la arquitectura Client+SWR. En el stack actual no hay endpoint custom — el toggle va directo a Supabase via cliente JS.
+**Corrección (mínimo cambio):** el criterio ahora verifica que en `/archivados` no existe interfaz de toggle (sin `ToggleCheck` en el DOM). La protección a nivel de datos sigue siendo responsabilidad de RLS (documentada en T-04/T-05). Evita asumir un endpoint que no existe.
 
 
