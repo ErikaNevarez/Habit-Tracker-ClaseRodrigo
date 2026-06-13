@@ -7,8 +7,8 @@ Si alguna está en **no**, esa línea te dice qué cerrar primero.
 
 ## 1. Especificación (`spec.md`)
 
-- [ ] `spec.md` existe en la raíz del repositorio.
-- [ ] Todos los criterios de aceptación están numerados (#1–#37).
+- [S] `spec.md` existe en la raíz del repositorio.
+- [S] Todos los criterios de aceptación están numerados (#1–#37).
 - [ ] Ningún criterio del núcleo (auth, hábitos, checkins, racha) está marcado como bloqueante sin resolución.
 - [ ] El alcance del núcleo está delimitado explícitamente (sin Stripe, sin recordatorios, sin PWA en el build inicial).
 
