@@ -59,6 +59,7 @@ El contenedor de página usa `max-w-lg mx-auto px-4` en móvil y `px-8` en `sm:`
 | `PlanBanner` | `premium-upsell`, `expiring` | `rounded-lg bg-violet-50 border border-violet-200 p-4 text-sm` |
 | `OfflineBanner` | — | `w-full bg-amber-100 text-amber-800 text-center text-sm py-2` |
 | `FormField` | `text`, `textarea`, `select`, `time` | `flex flex-col gap-1` con `<label>` en `text-sm font-medium text-gray-700` |
+| `Header` | — | `w-full bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between` con botón logout en `text-sm text-gray-500 hover:text-gray-900` |
 | `StatRow` | — | `flex items-center justify-between py-3 border-b border-gray-100` |
 
 ---
