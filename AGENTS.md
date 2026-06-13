@@ -26,6 +26,26 @@ Este documento define el contrato operativo y técnico que deben seguir los agen
 - `insumos/` y `docs/` para documentación interna y prompts
 
 ## Política de commits
+
+### Formato obligatorio
+
+```
+<tipo>(<scope>): <descripción en imperativo, minúsculas, sin punto final>
+```
+
+| Campo | Valores permitidos | Ejemplo |
+|---|---|---|
+| `tipo` | `feat`, `fix`, `docs`, `chore`, `refactor`, `test` | `feat` |
+| `scope` | nombre de la tarea (`t-01`), módulo (`auth`, `habits`, `checkins`) o artefacto (`adr`, `spec`, `plan`) | `t-06` |
+| `descripción` | frase corta en imperativo, minúsculas, sin punto final | `agregar página de signup` |
+
+Ejemplos válidos:
+- `feat(t-06): agregar página de signup con validación de email duplicado`
+- `fix(checkins): corregir UPSERT cuando done es false`
+- `docs(adr): registrar ADR-0002 sobre middleware de sesión`
+- `chore(plan): marcar T-01 como completada`
+
+### Reglas adicionales
 - Commits atómicos y verificables: una unidad funcional por commit
 - No commits genéricos tipo "implement everything"
 - Cada cambio debe poder revisarse y describirse claramente
