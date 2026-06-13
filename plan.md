@@ -192,7 +192,7 @@ npx create-next-app@latest habit-tracker --typescript --tailwind --app --src-dir
 **Estado:** `[ ]`
 **Descripción:** Crear función pura `calcStreak(checkins: Checkin[], frequency: 'daily' | 'weekly', targetPerWeek: number): number` en `src/lib/streak.ts`. Para `daily`: contar días consecutivos con `done = true` terminando en hoy. Para `weekly`: contar semanas ISO consecutivas con ≥ `target_per_week` checkins completos. Integrar en `/habito/[id]` (T-16): mostrar racha numérica con etiqueta "Empieza hoy" si racha = 0. Tras calcular la racha, persistir el máximo histórico: `UPDATE habits SET best_streak = GREATEST(best_streak, racha_calculada) WHERE id = habit_id AND user_id = auth.uid()` usando `src/lib/supabase/client.ts`.
 **Dependencias:** T-16
-**ADR:** 0001 (lógica de racha, best_streak persistido en habits), 0002
+**ADR:** 0001 (lógica de racha, best_streak persistido en habits)
 **Criterio de hecho:** Hábito `daily` con checkins en los últimos 3 días consecutivos muestra racha = 3. Hábito `daily` sin checkins muestra racha = 0 y "Empieza hoy". Hábito `weekly` con 2 semanas completas consecutivas muestra racha = 2. La columna `best_streak` en `habits` refleja el máximo histórico (verificable en panel Supabase). `tsc --noEmit` pasa.
 **Prueba manual:** PT-19, PT-20
 
@@ -212,7 +212,7 @@ npx create-next-app@latest habit-tracker --typescript --tailwind --app --src-dir
 ## T-19 — Archivado, desarchivado y página `/archivados`
 
 **Estado:** `[ ]`
-**Descripción:** Agregar botón "Archivar" en `/habito/[id]` que hace `UPDATE habits SET archived_at = now()`. Crear `src/app/archivados/page.tsx` listando hábitos con `archived_at IS NOT NULL`, con botón "Desarchivar" que hace `UPDATE habits SET archived_at = null`. En la lógica de toggle (T-15), agregar validación: si el hábito tiene `archived_at IS NOT NULL`, rechazar con error 400.
+**Descripción:** Agregar botón "Archivar" en `/habito/[id]` que hace `UPDATE habits SET archived_at = now()`. Crear `src/app/archivados/page.tsx` listando hábitos con `archived_at IS NOT NULL`, con botón "Desarchivar" que hace `UPDATE habits SET archived_at = null`. En la lógica de toggle (T-15), agregar validación cliente: si el hábito en caché SWR tiene `archived_at IS NOT NULL`, no enviar el UPSERT y mostrar Toast "No se pudo guardar, intenta de nuevo".
 **Dependencias:** T-18
 **ADR:** 0001 (archived_at = soft-delete reversible)
 **Criterio de hecho:** Archivar quita el hábito de `/` y lo muestra en `/archivados`. Desarchivar lo devuelve a `/` y acepta toggles. En `/archivados` no existe interfaz de toggle — solo el botón "Desarchivar" (verificar que no hay `ToggleCheck` en el DOM). `tsc --noEmit` pasa.
