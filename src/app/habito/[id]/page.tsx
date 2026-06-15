@@ -1,11 +1,12 @@
 'use client'
 
-import { use } from 'react'
+import { use, useEffect } from 'react'
 import { notFound } from 'next/navigation'
 import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import Header from '@/components/Header'
 import StreakStrip from '@/components/StreakStrip'
+import { calcStreak } from '@/lib/streak'
 
 interface Habit {
   id: string
@@ -67,12 +68,31 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
     () => fetchCheckins14d(id)
   )
 
+  const streak = habit && checkins
+    ? calcStreak(checkins, habit.frequency, habit.target_per_week ?? 1)
+    : 0
+
+  useEffect(() => {
+    if (!habit || !checkins) return
+    if (streak <= habit.best_streak) return
+
+    const supabase = createClient()
+    supabase
+      .from('habits')
+      .update({ best_streak: streak })
+      .eq('id', habit.id)
+      .then(() => {})
+  }, [streak, habit, checkins])
+
   if (!isLoading && (error || habit === null)) {
     notFound()
   }
 
   const frecuenciaLabel =
     habit?.frequency === 'daily' ? 'Diaria' : 'Semanal'
+
+  const streakUnit =
+    habit?.frequency === 'weekly' ? 'semanas consecutivas' : 'días consecutivos'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -84,6 +104,16 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
           <>
             <h1 className="text-2xl font-bold text-gray-900 mb-1">{habit.name}</h1>
             <p className="text-sm text-gray-500 mb-6">Frecuencia: {frecuenciaLabel}</p>
+
+            <section aria-label="Racha actual" className="mb-6">
+              {streak === 0 ? (
+                <p className="text-sm text-gray-500">Empieza hoy</p>
+              ) : (
+                <p className="text-lg font-semibold text-gray-900">
+                  {streak} {streakUnit}
+                </p>
+              )}
+            </section>
 
             <section aria-label="Franja de 14 días">
               <h2 className="text-lg font-semibold text-gray-900 mb-2">Últimos 14 días</h2>
