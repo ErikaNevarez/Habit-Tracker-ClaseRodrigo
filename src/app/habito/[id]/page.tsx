@@ -1,16 +1,18 @@
 'use client'
 
-import { use, useEffect } from 'react'
+import { use, useEffect, useState } from 'react'
 import { notFound } from 'next/navigation'
-import useSWR from 'swr'
+import useSWR, { mutate } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import Header from '@/components/Header'
 import StreakStrip from '@/components/StreakStrip'
 import { calcStreak } from '@/lib/streak'
+import HabitForm from '@/components/HabitForm'
 
 interface Habit {
   id: string
   name: string
+  description: string | null
   frequency: 'daily' | 'weekly'
   target_per_week: number | null
   best_streak: number
@@ -57,6 +59,7 @@ interface HabitDetailPageProps {
 
 export default function HabitDetailPage({ params }: HabitDetailPageProps) {
   const { id } = use(params)
+  const [showEditForm, setShowEditForm] = useState(false)
 
   const { data: habit, isLoading, error } = useSWR<Habit | null>(
     `habit-${id}`,
@@ -102,7 +105,16 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
           <p className="text-sm text-gray-500">Cargando hábito...</p>
         ) : (
           <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">{habit.name}</h1>
+            <div className="flex items-center justify-between mb-1">
+              <h1 className="text-2xl font-bold text-gray-900">{habit.name}</h1>
+              <button
+                type="button"
+                onClick={() => setShowEditForm(true)}
+                className="text-sm text-violet-600 hover:text-violet-800 font-medium"
+              >
+                Editar
+              </button>
+            </div>
             <p className="text-sm text-gray-500 mb-6">Frecuencia: {frecuenciaLabel}</p>
 
             <section aria-label="Racha actual" className="mb-6">
@@ -123,6 +135,22 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
               />
             </section>
           </>
+        )}
+        {showEditForm && habit && (
+          <HabitForm
+            initialValues={{
+              id: habit.id,
+              name: habit.name,
+              description: habit.description,
+              frequency: habit.frequency,
+              target_per_week: habit.target_per_week,
+            }}
+            onClose={() => setShowEditForm(false)}
+            onSuccess={() => {
+              mutate(`habit-${id}`)
+              setShowEditForm(false)
+            }}
+          />
         )}
       </main>
     </div>
