@@ -75,6 +75,10 @@ export default function HomePage() {
   }, [habits, isLoading, router])
 
   async function handleToggle(habit: Habit) {
+    if (habit.archived_at !== null) {
+      setToastMessage('No se pudo guardar, intenta de nuevo')
+      return
+    }
     const today = new Date().toLocaleDateString('sv')
     const current = checkins?.find((c) => c.habit_id === habit.id)
     const newDone = current ? !current.done : true
