@@ -3,18 +3,28 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+interface InitialValues {
+  id: string
+  name: string
+  description: string | null
+  frequency: 'daily' | 'weekly'
+  target_per_week: number | null
+}
+
 interface HabitFormProps {
   onClose: () => void
   onSuccess: () => void
+  initialValues?: InitialValues
 }
 
 type Frequency = 'daily' | 'weekly'
 
-export default function HabitForm({ onClose, onSuccess }: HabitFormProps) {
-  const [nombre, setNombre] = useState('')
-  const [descripcion, setDescripcion] = useState('')
-  const [frecuencia, setFrecuencia] = useState<Frequency>('daily')
-  const [targetPerWeek, setTargetPerWeek] = useState<number>(1)
+export default function HabitForm({ onClose, onSuccess, initialValues }: HabitFormProps) {
+  const isEditing = !!initialValues
+  const [nombre, setNombre] = useState(initialValues?.name ?? '')
+  const [descripcion, setDescripcion] = useState(initialValues?.description ?? '')
+  const [frecuencia, setFrecuencia] = useState<Frequency>(initialValues?.frequency ?? 'daily')
+  const [targetPerWeek, setTargetPerWeek] = useState<number>(initialValues?.target_per_week ?? 1)
   const [fieldError, setFieldError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -46,12 +56,16 @@ export default function HabitForm({ onClose, onSuccess }: HabitFormProps) {
     setIsSubmitting(true)
     const supabase = createClient()
 
-    const { error } = await supabase.from('habits').insert({
+    const payload = {
       name: nombre.trim(),
       description: descripcion.trim() || null,
       frequency: frecuencia,
       target_per_week: frecuencia === 'weekly' ? targetPerWeek : null,
-    })
+    }
+
+    const { error } = isEditing
+      ? await supabase.from('habits').update(payload).eq('id', initialValues.id)
+      : await supabase.from('habits').insert(payload)
 
     setIsSubmitting(false)
 
@@ -71,7 +85,9 @@ export default function HabitForm({ onClose, onSuccess }: HabitFormProps) {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/50">
       <div className="rounded-2xl bg-white p-8 max-w-sm w-full">
-        <h2 className="text-base font-semibold text-gray-900 mb-6">Nuevo hábito</h2>
+        <h2 className="text-base font-semibold text-gray-900 mb-6">
+          {isEditing ? 'Editar hábito' : 'Nuevo hábito'}
+        </h2>
 
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
@@ -171,7 +187,7 @@ export default function HabitForm({ onClose, onSuccess }: HabitFormProps) {
               disabled={isSubmitting}
               className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
             >
-              {isSubmitting ? 'Guardando…' : 'Crear hábito'}
+              {isSubmitting ? 'Guardando…' : isEditing ? 'Guardar cambios' : 'Crear hábito'}
             </button>
           </div>
         </form>
