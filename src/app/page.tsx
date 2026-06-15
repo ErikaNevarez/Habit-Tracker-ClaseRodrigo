@@ -6,6 +6,8 @@ import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import Header from '@/components/Header'
 import HabitForm from '@/components/HabitForm'
+import ToggleCheck from '@/components/ToggleCheck'
+import Toast from '@/components/Toast'
 
 interface Habit {
   id: string
@@ -18,7 +20,14 @@ interface Habit {
   created_at: string
 }
 
+interface Checkin {
+  habit_id: string
+  date: string
+  done: boolean
+}
+
 const HABITS_KEY = 'habits-active'
+const CHECKINS_TODAY_KEY = 'checkins-today'
 
 async function fetchActiveHabits(): Promise<Habit[]> {
   const supabase = createClient()
@@ -32,13 +41,31 @@ async function fetchActiveHabits(): Promise<Habit[]> {
   return data ?? []
 }
 
+async function fetchCheckinsToday(): Promise<Checkin[]> {
+  const supabase = createClient()
+  const today = new Date().toLocaleDateString('sv')
+  const { data, error } = await supabase
+    .from('checkins')
+    .select('habit_id, date, done')
+    .eq('date', today)
+
+  if (error) throw error
+  return data ?? []
+}
+
 export default function HomePage() {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-  const { data: habits, isLoading, mutate } = useSWR<Habit[]>(
+  const { data: habits, isLoading, mutate: mutateHabits } = useSWR<Habit[]>(
     HABITS_KEY,
     fetchActiveHabits
+  )
+
+  const { data: checkins, mutate: mutateCheckins } = useSWR<Checkin[]>(
+    CHECKINS_TODAY_KEY,
+    fetchCheckinsToday
   )
 
   useEffect(() => {
@@ -46,6 +73,32 @@ export default function HomePage() {
       router.replace('/onboarding')
     }
   }, [habits, isLoading, router])
+
+  async function handleToggle(habit: Habit) {
+    const today = new Date().toLocaleDateString('sv')
+    const current = checkins?.find((c) => c.habit_id === habit.id)
+    const newDone = current ? !current.done : true
+
+    const optimisticCheckins: Checkin[] = [
+      ...(checkins ?? []).filter((c) => c.habit_id !== habit.id),
+      { habit_id: habit.id, date: today, done: newDone },
+    ]
+
+    await mutateCheckins(optimisticCheckins, { revalidate: false })
+
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('checkins')
+      .upsert(
+        { habit_id: habit.id, date: today, done: newDone },
+        { onConflict: 'habit_id,date' }
+      )
+
+    if (error) {
+      await mutateCheckins(checkins, { revalidate: false })
+      setToastMessage('No se pudo guardar, intenta de nuevo')
+    }
+  }
 
   if (isLoading || !habits) {
     return (
@@ -73,28 +126,44 @@ export default function HomePage() {
         </div>
 
         <ul className="flex flex-col gap-4">
-          {habits.map((habit) => (
-            <li
-              key={habit.id}
-              className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm"
-            >
-              <div>
-                <p className="text-lg font-semibold text-gray-900">{habit.name}</p>
-                {habit.description && (
-                  <p className="text-sm text-gray-500">{habit.description}</p>
-                )}
-              </div>
-            </li>
-          ))}
+          {habits.map((habit) => {
+            const checkin = checkins?.find((c) => c.habit_id === habit.id)
+            const isDone = checkin?.done ?? false
+            return (
+              <li
+                key={habit.id}
+                className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm"
+              >
+                <div>
+                  <p className="text-lg font-semibold text-gray-900">{habit.name}</p>
+                  {habit.description && (
+                    <p className="text-sm text-gray-500">{habit.description}</p>
+                  )}
+                </div>
+                <ToggleCheck
+                  done={isDone}
+                  onToggle={() => handleToggle(habit)}
+                />
+              </li>
+            )
+          })}
         </ul>
 
         {showForm && (
           <HabitForm
             onClose={() => setShowForm(false)}
             onSuccess={() => {
-              mutate()
+              mutateHabits()
               setShowForm(false)
             }}
+          />
+        )}
+
+        {toastMessage && (
+          <Toast
+            message={toastMessage}
+            type="error"
+            onClose={() => setToastMessage(null)}
           />
         )}
       </main>
