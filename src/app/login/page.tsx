@@ -86,12 +86,18 @@ function LoginForm() {
         </button>
       </form>
 
-      <div className="mt-4 text-center">
+      <div className="mt-4 flex flex-col gap-2 text-center">
         <Link
           href="/reset"
           className="text-sm text-gray-500 hover:text-gray-900"
         >
           ¿Olvidaste tu contraseña?
+        </Link>
+        <Link
+          href="/signup"
+          className="text-sm text-violet-600 hover:text-violet-800 font-medium"
+        >
+          ¿No tienes cuenta? Crear cuenta
         </Link>
       </div>
 
