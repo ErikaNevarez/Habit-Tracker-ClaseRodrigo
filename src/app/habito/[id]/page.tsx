@@ -1,6 +1,7 @@
 'use client'
 
 import { use, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { notFound, useRouter } from 'next/navigation'
 import useSWR, { mutate } from 'swr'
 import { createClient } from '@/lib/supabase/client'
@@ -85,6 +86,7 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
       .update({ archived_at: new Date().toISOString() })
       .eq('id', id)
     if (!error) {
+      mutate('habits-active')
       router.push('/')
     } else {
       setIsArchiving(false)
@@ -117,6 +119,9 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="max-w-lg mx-auto px-4 py-8">
+        <Link href="/" className="text-sm text-gray-500 hover:text-gray-900 mb-6 inline-block">
+          ← Mis hábitos
+        </Link>
         {isLoading || !habit ? (
           <p className="text-sm text-gray-500">Cargando hábito...</p>
         ) : (
