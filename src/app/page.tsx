@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import useSWR from 'swr'
@@ -55,7 +54,6 @@ async function fetchCheckinsToday(): Promise<Checkin[]> {
 }
 
 export default function HomePage() {
-  const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
@@ -69,11 +67,6 @@ export default function HomePage() {
     fetchCheckinsToday
   )
 
-  useEffect(() => {
-    if (!isLoading && habits && habits.length === 0) {
-      router.replace('/onboarding')
-    }
-  }, [habits, isLoading, router])
 
   async function handleToggle(habit: Habit) {
     if (habit.archived_at !== null) {
@@ -129,6 +122,15 @@ export default function HomePage() {
             Nuevo hábito
           </button>
         </div>
+
+        {habits.length === 0 && (
+          <div className="flex flex-col items-center gap-4 py-16 text-center">
+            <p className="text-gray-500 text-sm">No tienes hábitos activos.</p>
+            <Link href="/archivados" className="text-sm text-violet-600 hover:text-violet-800 font-medium">
+              Ver archivados
+            </Link>
+          </div>
+        )}
 
         <ul className="flex flex-col gap-4">
           {habits.map((habit) => {
