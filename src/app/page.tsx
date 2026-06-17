@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
@@ -138,12 +139,12 @@ export default function HomePage() {
                 key={habit.id}
                 className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm"
               >
-                <div>
+                <Link href={`/habito/${habit.id}`} className="flex-1 min-w-0 mr-4">
                   <p className="text-lg font-semibold text-gray-900">{habit.name}</p>
                   {habit.description && (
                     <p className="text-sm text-gray-500">{habit.description}</p>
                   )}
-                </div>
+                </Link>
                 <ToggleCheck
                   done={isDone}
                   onToggle={() => handleToggle(habit)}
