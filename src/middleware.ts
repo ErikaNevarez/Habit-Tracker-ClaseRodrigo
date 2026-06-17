@@ -58,7 +58,10 @@ export async function middleware(request: NextRequest) {
   if (!isPublicRoute(pathname) && isProtectedRoute(pathname) && user === null) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
-    loginUrl.search = 'expired=1'
+    const hadSession = request.cookies.getAll().some(({ name }) =>
+      name.startsWith('sb-') && name.endsWith('-auth-token')
+    )
+    loginUrl.search = hadSession ? 'expired=1' : ''
     return NextResponse.redirect(loginUrl)
   }
 

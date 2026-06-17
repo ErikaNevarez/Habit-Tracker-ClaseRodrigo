@@ -123,7 +123,7 @@ export default function HomePage() {
           <h1 className="text-2xl font-bold text-gray-900">Hoy</h1>
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+            className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold bg-violet-600 text-white hover:bg-violet-700"
           >
             Nuevo hábito
           </button>
