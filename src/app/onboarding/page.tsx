@@ -1,7 +1,14 @@
-import Link from 'next/link';
-import Header from '@/components/Header';
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Header from '@/components/Header'
+import HabitForm from '@/components/HabitForm'
 
 export default function OnboardingPage() {
+  const router = useRouter()
+  const [showForm, setShowForm] = useState(false)
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -17,13 +24,20 @@ export default function OnboardingPage() {
           </p>
         </div>
 
-        <Link
-          href="/"
-          className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+        <button
+          onClick={() => setShowForm(true)}
+          className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold bg-violet-600 text-white hover:bg-violet-700"
         >
           Crear tu primer hábito
-        </Link>
+        </button>
       </main>
+
+      {showForm && (
+        <HabitForm
+          onClose={() => setShowForm(false)}
+          onSuccess={() => router.push('/')}
+        />
+      )}
     </div>
-  );
+  )
 }
