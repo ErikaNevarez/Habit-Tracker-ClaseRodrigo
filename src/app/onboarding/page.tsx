@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { mutate } from 'swr'
 import Header from '@/components/Header'
 import HabitForm from '@/components/HabitForm'
 
@@ -35,7 +36,10 @@ export default function OnboardingPage() {
       {showForm && (
         <HabitForm
           onClose={() => setShowForm(false)}
-          onSuccess={() => router.push('/')}
+          onSuccess={() => {
+            mutate('habits-active', undefined, { revalidate: false })
+            router.push('/')
+          }}
         />
       )}
     </div>
