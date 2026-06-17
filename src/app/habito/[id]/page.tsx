@@ -62,7 +62,6 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
   const { id } = use(params)
   const router = useRouter()
   const [showEditForm, setShowEditForm] = useState(false)
-  const [isArchiving, setIsArchiving] = useState(false)
 
   const { data: habit, isLoading, error } = useSWR<Habit | null>(
     `habit-${id}`,
@@ -78,22 +77,7 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
     ? calcStreak(checkins, habit.frequency, habit.target_per_week ?? 1)
     : 0
 
-  async function handleArchivar() {
-    setIsArchiving(true)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('habits')
-      .update({ archived_at: new Date().toISOString() })
-      .eq('id', id)
-    if (!error) {
-      mutate('habits-active')
-      router.push('/')
-    } else {
-      setIsArchiving(false)
-    }
-  }
-
-  useEffect(() => {
+useEffect(() => {
     if (!habit || !checkins) return
     if (streak <= habit.best_streak) return
 
@@ -128,23 +112,13 @@ export default function HabitDetailPage({ params }: HabitDetailPageProps) {
           <>
             <div className="flex items-center justify-between mb-1">
               <h1 className="text-2xl font-bold text-gray-900">{habit.name}</h1>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEditForm(true)}
-                  className="text-sm text-violet-600 hover:text-violet-800 font-medium"
-                >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleArchivar}
-                  disabled={isArchiving}
-                  className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50"
-                >
-                  {isArchiving ? 'Archivando...' : 'Archivar'}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditForm(true)}
+                className="text-sm text-violet-600 hover:text-violet-800 font-medium"
+              >
+                Editar
+              </button>
             </div>
             <p className="text-sm text-gray-500 mb-6">Frecuencia: {frecuenciaLabel}</p>
 

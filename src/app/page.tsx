@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import useSWR from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import Header from '@/components/Header'
@@ -56,6 +56,8 @@ async function fetchCheckinsToday(): Promise<Checkin[]> {
 export default function HomePage() {
   const [showForm, setShowForm] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null)
+  const [isArchiving, setIsArchiving] = useState(false)
 
   const { data: habits, isLoading, mutate: mutateHabits } = useSWR<Habit[]>(
     HABITS_KEY,
@@ -67,12 +69,7 @@ export default function HomePage() {
     fetchCheckinsToday
   )
 
-
   async function handleToggle(habit: Habit) {
-    if (habit.archived_at !== null) {
-      setToastMessage('No se pudo guardar, intenta de nuevo')
-      return
-    }
     const today = new Date().toLocaleDateString('sv')
     const current = checkins?.find((c) => c.habit_id === habit.id)
     const newDone = current ? !current.done : true
@@ -96,6 +93,27 @@ export default function HomePage() {
       await mutateCheckins(checkins, { revalidate: false })
       setToastMessage('No se pudo guardar, intenta de nuevo')
     }
+  }
+
+  async function handleConfirmArchive() {
+    if (!confirmArchiveId) return
+    setIsArchiving(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('habits')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', confirmArchiveId)
+
+    if (!error) {
+      await mutateHabits(
+        (prev) => prev?.filter((h) => h.id !== confirmArchiveId) ?? [],
+        { revalidate: false }
+      )
+    } else {
+      setToastMessage('No se pudo archivar, intenta de nuevo')
+    }
+    setIsArchiving(false)
+    setConfirmArchiveId(null)
   }
 
   if (isLoading || !habits) {
@@ -139,14 +157,22 @@ export default function HomePage() {
             return (
               <li
                 key={habit.id}
-                className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm"
+                className="flex items-center justify-between rounded-xl bg-white p-4 shadow-sm gap-3"
               >
-                <Link href={`/habito/${habit.id}`} className="flex-1 min-w-0 mr-4">
+                <Link href={`/habito/${habit.id}`} className="flex-1 min-w-0">
                   <p className="text-lg font-semibold text-gray-900">{habit.name}</p>
                   {habit.description && (
                     <p className="text-sm text-gray-500">{habit.description}</p>
                   )}
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setConfirmArchiveId(habit.id)}
+                  className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
+                  aria-label={`Archivar ${habit.name}`}
+                >
+                  Archivar
+                </button>
                 <ToggleCheck
                   done={isDone}
                   onToggle={() => handleToggle(habit)}
@@ -164,6 +190,34 @@ export default function HomePage() {
               setShowForm(false)
             }}
           />
+        )}
+
+        {confirmArchiveId && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+            <div className="rounded-2xl bg-white p-8 max-w-sm w-full mx-4 flex flex-col gap-4">
+              <h2 className="text-base font-semibold text-gray-900">¿Archivar hábito?</h2>
+              <p className="text-sm text-gray-600">
+                El hábito se moverá a tus archivados y dejará de aparecer en tu lista diaria.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmArchiveId(null)}
+                  className="text-sm text-gray-500 hover:text-gray-900"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmArchive}
+                  disabled={isArchiving}
+                  className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50"
+                >
+                  {isArchiving ? 'Archivando...' : 'Sí, archivar'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {toastMessage && (
