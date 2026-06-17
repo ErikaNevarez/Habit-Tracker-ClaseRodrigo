@@ -56,7 +56,15 @@ export default function HabitForm({ onClose, onSuccess, initialValues }: HabitFo
     setIsSubmitting(true)
     const supabase = createClient()
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setFieldError('Error inesperado, intenta de nuevo')
+      setIsSubmitting(false)
+      return
+    }
+
     const payload = {
+      user_id: user.id,
       name: nombre.trim(),
       description: descripcion.trim() || null,
       frequency: frecuencia,
