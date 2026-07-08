@@ -1,0 +1,378 @@
+{
+  "name": "Asistente personal",
+  "active": false,
+  "nodes": [
+    {
+      "id": "f4fa9d32-3bd8-4be3-b05d-c13deaba83db",
+      "name": "Escuchar Mensajes de Telegram",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.3,
+      "position": [240, 336],
+      "parameters": { "updates": ["message"], "additionalFields": {} },
+      "webhookId": "a4bf2a7c-3214-4b52-8294-f2f83dada950"
+    },
+    {
+      "id": "10c690b3-3255-4469-be14-75ba5e225dae",
+      "name": "¿Es nota de voz?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [464, 336],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3 },
+          "conditions": [
+            { "leftValue": "={{ $json.message.voice }}", "operator": { "type": "any", "operation": "exists" }, "rightValue": "", "id": "23837f4e-1634-4231-a3fc-e1eb2f2464df" }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "60698545-619d-442b-a7d8-77b8bcccd72c",
+      "name": "Procesar mensaje de texto",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [688, 432],
+      "parameters": {}
+    },
+    {
+      "id": "299b7c07-73df-4370-a7f9-880b3c8b8291",
+      "name": "Sticky Note a1b0f56a",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [256, -96],
+      "parameters": {
+        "content": "## Filtro voz / no-voz\nEl Telegram Trigger escucha **cualquier mensaje** (texto, voz, foto, etc.).\nEste IF comprueba si `message.voice` **existe** (operador `exists`, no \"is not empty\").\n\n- **TRUE** → es una nota de voz. Rama dejada sin conectar a propósito: en el módulo M03 se le conectará la descarga del audio con `getFile` (manual, sin usar el campo Download del Trigger).\n- **FALSE** → cualquier otro tipo de mensaje. Se normaliza/procesa como texto (nodo No Operation por ahora).",
+        "height": 328, "width": 520, "color": 5
+      }
+    },
+    {
+      "id": "0846ae80-c461-4e52-a418-4f8b9705160e",
+      "name": "Download audio",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [688, 240],
+      "parameters": { "resource": "file", "operation": "get", "fileId": "={{ $json.message.voice.file_id }}", "download": true, "additionalFields": {} },
+      "webhookId": "8bee5434-9679-4e55-b1df-f26500c2e081"
+    },
+    {
+      "id": "9910ffc2-2244-488a-8260-00b53b1b4cfa",
+      "name": "Whisper",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [912, 240],
+      "parameters": { "resource": "audio", "operation": "transcribe", "binaryPropertyName": "data", "options": { "language": "es" } }
+    },
+    {
+      "id": "7efb0cde-f6c1-4fcb-98db-e3bbfd8deb4c",
+      "name": "Nota Whisper",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [816, -96],
+      "parameters": {
+        "content": "## Whisper — Transcripción de audio\n**Input:** binario `data` (el archivo que dejó \"Download audio\" al descargar la nota de voz).\n**Output:** `text` — la transcripción en texto plano (`$json.text`).\n\n**Language forzado a `es`**: sin esto, audios cortos o con ruido de fondo suelen salir transcritos en inglés por defecto.\n\n**Costo**: la API de Whisper de OpenAI cobra por duración de audio (tarifa por minuto, redondeada al segundo). Una nota de voz típica de 10-15s cuesta una fracción de centavo — revisa la tarifa vigente en la página de precios de OpenAI, puede cambiar.\n\n⚠️ Falta asignar la credencial de OpenAI en este nodo (no existía ninguna en la instancia).",
+        "height": 260, "width": 560, "color": 3
+      }
+    },
+    {
+      "id": "4f7db567-8f5c-4d0f-a247-84889de2b995",
+      "name": "Interpretar Comando",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1136, 240],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Eres el interprete de comandos de un asistente de habitos por voz. A partir de la transcripcion del usuario, determina UNA de estas acciones:\n\n- crear_habito: el usuario quiere crear un habito nuevo (ej. \"crea el habito de leer\", \"agrega meditar 3 veces por semana\").\n- marcar_hecho: el usuario dice que ya hizo o completo un habito hoy (ej. \"hice ejercicio hoy\", \"marca leer como hecho\").\n- listar_habitos: el usuario pregunta que habitos tiene (ej. \"que habitos tengo\", \"lista mis habitos\").\n- no_entendido: cualquier otra cosa, o si no puedes identificar el nombre del habito cuando se requiere.\n\nReglas de los campos de salida:\n- habit_name: nombre del habito en minusculas, conciso (ej. \"hacer ejercicio\" -> \"ejercicio\"). null si la accion es listar_habitos o no_entendido.\n- frequency: 'daily' por defecto si no se especifica: 'weekly' si el usuario menciona una cantidad de veces por semana. null si la accion no es crear_habito.\n- target_per_week: si frequency es 'weekly', el numero de veces mencionado (1-7); si es 'daily', usa 7. null si la accion no es crear_habito.\n\nResponde unicamente con el JSON estructurado, sin texto adicional."
+        }
+      }
+    },
+    {
+      "id": "0193e65a-1d57-4001-98c3-0b83668c64ff",
+      "name": "Modelo de Interpretacion",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [1152, 464],
+      "parameters": {
+        "model": { "__rl": true, "mode": "list", "value": "gpt-5-mini", "cachedResultName": "gpt-5-mini" },
+        "builtInTools": {},
+        "options": { "temperature": 0.1 },
+        "responsesApiEnabled": true
+      }
+    },
+    {
+      "id": "79aa917c-fd18-4dc7-a981-ca678ec0380e",
+      "name": "Parser de Comando",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [1280, 464],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"action\":{\"type\":\"string\",\"enum\":[\"crear_habito\",\"marcar_hecho\",\"listar_habitos\",\"no_entendido\"]},\"habit_name\":{\"type\":[\"string\",\"null\"]},\"frequency\":{\"type\":[\"string\",\"null\"],\"enum\":[\"daily\",\"weekly\",null]},\"target_per_week\":{\"type\":[\"number\",\"null\"]}},\"required\":[\"action\",\"habit_name\",\"frequency\",\"target_per_week\"]}"
+      }
+    },
+    {
+      "id": "f9a452b8-d1eb-459a-952d-603832cb6f7b",
+      "name": "Enrutar Accion",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [1488, 208],
+      "parameters": {
+        "rules": {
+          "values": [
+            { "outputKey": "crear_habito", "renameOutput": true, "conditions": { "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.action }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "crear_habito" }], "combinator": "and" } },
+            { "outputKey": "marcar_hecho", "renameOutput": true, "conditions": { "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.action }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "marcar_hecho" }], "combinator": "and" } },
+            { "outputKey": "listar_habitos", "renameOutput": true, "conditions": { "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" }, "conditions": [{ "leftValue": "={{ $json.output.action }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "listar_habitos" }], "combinator": "and" } }
+          ]
+        },
+        "options": { "fallbackOutput": "extra", "renameFallbackOutput": "no_entendido" }
+      }
+    },
+    {
+      "id": "b9f01ec0-85bd-4d97-b0c5-26f42dc55a36",
+      "name": "Crear Habito en Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2000, -64],
+      "parameters": {
+        "resource": "row", "operation": "create", "tableId": "habits",
+        "fieldsUi": { "fieldValues": [
+          { "fieldId": "user_id", "fieldValue": "4b7341d3-468e-4418-a49b-7bee585933cd" },
+          { "fieldId": "name", "fieldValue": "={{ $json.output.habit_name }}" },
+          { "fieldId": "frequency", "fieldValue": "={{ $json.output.frequency || 'daily' }}" },
+          { "fieldId": "target_per_week", "fieldValue": "={{ $json.output.target_per_week || ($json.output.frequency === 'weekly' ? 3 : 7) }}" }
+        ] }
+      }
+    },
+    {
+      "id": "eb09e302-ec5f-4092-9568-0566231e5882",
+      "name": "Confirmar Habito Creado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2224, -64],
+      "parameters": {
+        "resource": "message", "operation": "sendMessage",
+        "chatId": "={{ $('Escuchar Mensajes de Telegram').item.json.message.chat.id }}",
+        "text": "={{ 'Habito \"' + $json.name + '\" creado (' + $json.frequency + ($json.frequency === 'weekly' ? ', ' + $json.target_per_week + 'x/semana' : '') + ').' }}",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "webhookId": "5b159a8a-efe9-491a-a35b-e705f4003909"
+    },
+    {
+      "id": "be32e19c-5683-474c-b445-a2c38da7dbf2",
+      "name": "Buscar Habito por Nombre",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2000, 128],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row", "operation": "getAll", "tableId": "habits", "limit": 1, "matchType": "allFilters",
+        "filters": { "conditions": [
+          { "keyName": "user_id", "condition": "eq", "keyValue": "4b7341d3-468e-4418-a49b-7bee585933cd" },
+          { "keyName": "name", "condition": "ilike", "keyValue": "={{ $json.output.habit_name }}" },
+          { "keyName": "archived_at", "condition": "is", "keyValue": "null" }
+        ] }
+      }
+    },
+    {
+      "id": "583454b6-501b-4a3d-8ee0-cb86c7a56d58",
+      "name": "Habito Encontrado",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [2224, 128],
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 }, "conditions": [{ "leftValue": "={{ $json.id }}", "operator": { "type": "any", "operation": "exists" }, "rightValue": "" }], "combinator": "and" },
+        "options": {}
+      }
+    },
+    {
+      "id": "00969ce8-f103-4838-9387-90680496f5ac",
+      "name": "Buscar Checkin de Hoy",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2448, 32],
+      "alwaysOutputData": true,
+      "parameters": {
+        "resource": "row", "operation": "getAll", "tableId": "checkins", "limit": 1, "matchType": "allFilters",
+        "filters": { "conditions": [
+          { "keyName": "habit_id", "condition": "eq", "keyValue": "={{ $json.id }}" },
+          { "keyName": "date", "condition": "eq", "keyValue": "={{ $today.toISODate() }}" }
+        ] }
+      }
+    },
+    {
+      "id": "30138575-8bc4-4b8f-8ecd-b267dbfaf86a",
+      "name": "Checkin Ya Existe",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [2672, 32],
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 }, "conditions": [{ "leftValue": "={{ $json.id }}", "operator": { "type": "any", "operation": "exists" }, "rightValue": "" }], "combinator": "and" },
+        "options": {}
+      }
+    },
+    {
+      "id": "7fabad7c-07fe-4347-a69a-910cc4f7cbcf",
+      "name": "Actualizar Checkin a Hecho",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2896, -64],
+      "parameters": {
+        "resource": "row", "operation": "update", "tableId": "checkins", "matchType": "allFilters",
+        "filters": { "conditions": [{ "keyName": "id", "condition": "eq", "keyValue": "={{ $json.id }}" }] },
+        "fieldsUi": { "fieldValues": [{ "fieldId": "done", "fieldValue": "={{ true }}" }] }
+      }
+    },
+    {
+      "id": "10ddb9f9-c635-4c9b-a4a3-f5a1df205089",
+      "name": "Crear Checkin de Hoy",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2896, 128],
+      "parameters": {
+        "resource": "row", "operation": "create", "tableId": "checkins",
+        "fieldsUi": { "fieldValues": [
+          { "fieldId": "habit_id", "fieldValue": "={{ $('Buscar Habito por Nombre').item.json.id }}" },
+          { "fieldId": "date", "fieldValue": "={{ $today.toISODate() }}" },
+          { "fieldId": "done", "fieldValue": "={{ true }}" }
+        ] }
+      }
+    },
+    {
+      "id": "eccc96a6-9820-4bac-8d22-40d0afe2bfba",
+      "name": "Confirmar Marcado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [3120, 32],
+      "parameters": {
+        "resource": "message", "operation": "sendMessage",
+        "chatId": "={{ $('Escuchar Mensajes de Telegram').item.json.message.chat.id }}",
+        "text": "={{ '\"' + $('Buscar Habito por Nombre').item.json.name + '\" marcado como hecho hoy.' }}",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "webhookId": "7a5fb011-a947-4112-bf30-ee2c00e1bb2e"
+    },
+    {
+      "id": "b8e791b2-bf6f-4714-9e7c-ce48f9435f2a",
+      "name": "Avisar Habito No Encontrado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2448, 224],
+      "parameters": {
+        "resource": "message", "operation": "sendMessage",
+        "chatId": "={{ $('Escuchar Mensajes de Telegram').item.json.message.chat.id }}",
+        "text": "={{ 'No encontre el habito \"' + $('Interpretar Comando').item.json.output.habit_name + '\". Revisa el nombre o creelo primero.' }}",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "webhookId": "4c6e82ab-f294-4b77-ad25-0b66190af393"
+    },
+    {
+      "id": "49a297ce-d518-480e-87cf-12bdd0e590a0",
+      "name": "Listar Habitos Activos",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2000, 320],
+      "parameters": {
+        "resource": "row", "operation": "getAll", "tableId": "habits", "returnAll": true, "matchType": "allFilters",
+        "filters": { "conditions": [
+          { "keyName": "user_id", "condition": "eq", "keyValue": "4b7341d3-468e-4418-a49b-7bee585933cd" },
+          { "keyName": "archived_at", "condition": "is", "keyValue": "null" }
+        ] }
+      }
+    },
+    {
+      "id": "8f1d9233-05d1-418a-9073-46db3f03e132",
+      "name": "Responder Lista de Habitos",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2224, 320],
+      "executeOnce": true,
+      "parameters": {
+        "resource": "message", "operation": "sendMessage",
+        "chatId": "={{ $('Escuchar Mensajes de Telegram').item.json.message.chat.id }}",
+        "text": "={{ $input.all().length ? ('Tus habitos activos:\\n' + $input.all().map(i => '- ' + i.json.name + ' (' + i.json.frequency + (i.json.frequency === 'weekly' ? ', ' + i.json.target_per_week + 'x/semana' : '') + ')').join('\\n')) : 'No tienes habitos activos todavia.' }}",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "webhookId": "c2b4da88-15f2-4f64-ba30-d757f6ed1b1c"
+    },
+    {
+      "id": "9ccd8e2c-9459-4dcb-8869-f8ca76ea33a8",
+      "name": "Pedir Repetir Comando",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2000, 512],
+      "parameters": {
+        "resource": "message", "operation": "sendMessage",
+        "chatId": "={{ $('Escuchar Mensajes de Telegram').item.json.message.chat.id }}",
+        "text": "={{ 'No entendi ese comando. Intenta decir algo como \"crea el habito de leer\", \"hice ejercicio hoy\" o \"que habitos tengo\".' }}",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "webhookId": "6bceab48-29e6-43de-bae9-ddcfd183f2fd"
+    },
+    {
+      "id": "eaffe5dd-8ea1-4c0c-a417-a7bef325f14e",
+      "name": "Nota Interpretar Comando",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1408, -96],
+      "parameters": {
+        "content": "## Interpretar Comando\nAI Agent con Structured Output que convierte el texto de Whisper en un JSON:\n`{ action, habit_name, frequency, target_per_week }`\n\n**Acciones soportadas**: `crear_habito`, `marcar_hecho`, `listar_habitos`, `no_entendido` (fallback del Switch).\n\nRequiere credencial OpenAI en \"Modelo de Interpretacion\" (misma cuenta que Whisper).",
+        "height": 260, "width": 460, "color": 4
+      }
+    },
+    {
+      "id": "c611fcc2-40d4-4478-9a32-c0a76b690d22",
+      "name": "Nota Marcar Hecho",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3056, -336],
+      "parameters": {
+        "content": "## Rama marcar_hecho\nEl nodo Supabase de n8n no tiene upsert nativo, asi que se emula:\n1. Busca el habito por nombre (`alwaysOutputData` activo: si no existe, sigue con un item vacio para poder avisar).\n2. Si existe, busca si ya hay checkin de hoy.\n3. Si ya hay checkin -> update a done=true. Si no hay -> crea el checkin.\n\nAmbos caminos confirman por Telegram usando el nombre real del habito (referenciado explicitamente desde \"Buscar Habito por Nombre\", porque el nodo de checkins no trae el campo name).",
+        "height": 240, "width": 640, "color": 4
+      }
+    }
+  ],
+  "connections": {
+    "Escuchar Mensajes de Telegram": { "main": [[{ "node": "¿Es nota de voz?", "type": "main", "index": 0 }]] },
+    "¿Es nota de voz?": { "main": [
+      [{ "node": "Download audio", "type": "main", "index": 0 }],
+      [{ "node": "Procesar mensaje de texto", "type": "main", "index": 0 }]
+    ] },
+    "Download audio": { "main": [[{ "node": "Whisper", "type": "main", "index": 0 }]] },
+    "Whisper": { "main": [[{ "node": "Interpretar Comando", "type": "main", "index": 0 }]] },
+    "Modelo de Interpretacion": { "ai_languageModel": [[{ "node": "Interpretar Comando", "type": "ai_languageModel", "index": 0 }]] },
+    "Parser de Comando": { "ai_outputParser": [[{ "node": "Interpretar Comando", "type": "ai_outputParser", "index": 0 }]] },
+    "Interpretar Comando": { "main": [[{ "node": "Enrutar Accion", "type": "main", "index": 0 }]] },
+    "Enrutar Accion": { "main": [
+      [{ "node": "Crear Habito en Supabase", "type": "main", "index": 0 }],
+      [{ "node": "Buscar Habito por Nombre", "type": "main", "index": 0 }],
+      [{ "node": "Listar Habitos Activos", "type": "main", "index": 0 }],
+      [{ "node": "Pedir Repetir Comando", "type": "main", "index": 0 }]
+    ] },
+    "Crear Habito en Supabase": { "main": [[{ "node": "Confirmar Habito Creado", "type": "main", "index": 0 }]] },
+    "Buscar Habito por Nombre": { "main": [[{ "node": "Habito Encontrado", "type": "main", "index": 0 }]] },
+    "Habito Encontrado": { "main": [
+      [{ "node": "Buscar Checkin de Hoy", "type": "main", "index": 0 }],
+      [{ "node": "Avisar Habito No Encontrado", "type": "main", "index": 0 }]
+    ] },
+    "Buscar Checkin de Hoy": { "main": [[{ "node": "Checkin Ya Existe", "type": "main", "index": 0 }]] },
+    "Checkin Ya Existe": { "main": [
+      [{ "node": "Actualizar Checkin a Hecho", "type": "main", "index": 0 }],
+      [{ "node": "Crear Checkin de Hoy", "type": "main", "index": 0 }]
+    ] },
+    "Actualizar Checkin a Hecho": { "main": [[{ "node": "Confirmar Marcado", "type": "main", "index": 0 }]] },
+    "Crear Checkin de Hoy": { "main": [[{ "node": "Confirmar Marcado", "type": "main", "index": 0 }]] },
+    "Listar Habitos Activos": { "main": [[{ "node": "Responder Lista de Habitos", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "n8nWorkflowId": "dIfAduLqb46yNpQG",
+    "instanceUrl": "https://habit-tracker.oph.st/workflow/dIfAduLqb46yNpQG"
+  }
+}
