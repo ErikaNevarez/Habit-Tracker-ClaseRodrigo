@@ -1,0 +1,134 @@
+{
+  "name": "Tool - Leer Correos",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "🧩 Sub-agente: Leer Correos (Tool)\n\nQué hace:\n- Se ejecuta como *tool* desde el Agente principal.\n- Entrada: `cantidad` (opcional, default 5) y `filtro` (opcional, una query estilo Gmail, ej. `is:unread`).\n- Lee correos recientes y devuelve `resultado` (string) ya formateado para Telegram.\n\nImportante:\n- Aquí NO se envía nada a Telegram. Solo se regresa texto al agente.\n- Si quieres solo no leídos, el agente manda `filtro = \"is:unread\"`.",
+        "height": 260,
+        "width": 540
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-16, 288],
+      "id": "n1-overview-correos",
+      "name": "🟨 Nota - Overview"
+    },
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"cantidad\": 5,\n  \"filtro\": \"is:unread\"\n}"
+      },
+      "id": "n2-trigger-correos",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [592, 352]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-cantidad",
+              "name": "cantidad",
+              "value": "={{ $json.cantidad || 5 }}",
+              "type": "number"
+            },
+            {
+              "id": "set-filtro",
+              "name": "filtro",
+              "value": "={{ $json.filtro || 'is:unread' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [848, 352],
+      "id": "n3-preparar-correos",
+      "name": "Preparar Filtros"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": "={{ $json.cantidad }}",
+        "simple": true,
+        "filters": {
+          "q": "={{ $json.filtro }}"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1072, 352],
+      "id": "n4-gmail-getall",
+      "name": "Leer Correos",
+      "webhookId": "tool-leer-correos",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PEGA_TU_CREDENCIAL_GMAIL",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "correos",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1296, 352],
+      "id": "n5-agrupar-correos",
+      "name": "Agrupar Correos"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "format-correos",
+              "name": "resultado",
+              "value": "=📧 Correos ({{ $('Preparar Filtros').item.json.filtro }}):\n\n{{ $json.correos.length === 0 ? 'No hay correos que coincidan.' : $json.correos.map((c, i) => `${i+1}. De: ${c.from ?? c.From ?? 'desconocido'}\\n   Asunto: ${c.subject ?? c.Subject ?? '(sin asunto)'}\\n   ${c.snippet ?? ''}`).join('\\n\\n') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1520, 352],
+      "id": "n6-respuesta-correos",
+      "name": "Formatear Respuesta"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [[{ "node": "Preparar Filtros", "type": "main", "index": 0 }]]
+    },
+    "Preparar Filtros": {
+      "main": [[{ "node": "Leer Correos", "type": "main", "index": 0 }]]
+    },
+    "Leer Correos": {
+      "main": [[{ "node": "Agrupar Correos", "type": "main", "index": 0 }]]
+    },
+    "Agrupar Correos": {
+      "main": [[{ "node": "Formatear Respuesta", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
