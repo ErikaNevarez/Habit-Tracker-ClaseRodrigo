@@ -1,0 +1,448 @@
+{
+  "name": "S6 - Asistente Personal (correo + calendario)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "1) Entrada por Telegram\n- Escucha mensajes del bot (update: `message`).\n- Salen `message.text`, `message.voice` y metadatos del chat.",
+        "height": 300,
+        "width": 220
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-320, -40],
+      "id": "sn-entrada",
+      "name": "🟨 Nota 1 - Entrada"
+    },
+    {
+      "parameters": {
+        "content": "2) ¿Voz o texto?\n- TRUE: descarga audio → Whisper → normaliza.\n- FALSE: normaliza el texto directo.\n- Ambas ramas terminan en { userMessage, chatId, userName }.",
+        "height": 300,
+        "width": 220
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-80, -40],
+      "id": "sn-vozotexto",
+      "name": "🟨 Nota 2 - Voz vs Texto"
+    },
+    {
+      "parameters": {
+        "content": "3) AI Agent con herramientas\n- Interpreta lenguaje natural y decide qué tool usar.\n- Tools: leer_correos, enviar_correo, consultar_disponibilidad, agendar_reunion.\n- Reglas en el system prompt: preguntar si faltan datos, consultar disponibilidad ANTES de agendar, y confirmar antes de enviar correo o agendar.",
+        "height": 200,
+        "width": 620
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [600, -260],
+      "id": "sn-agent",
+      "name": "🟨 Nota 3 - AI Agent"
+    },
+    {
+      "parameters": {
+        "content": "4) Herramientas (sub-workflows)\nCada una es un workflow aparte que importas y reasignas en su nodo toolWorkflow.\nReemplaza cada workflowId `PEGA_ID_...` por el ID real del sub-workflow tras importarlo.",
+        "height": 240,
+        "width": 620
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [600, 380],
+      "id": "sn-tools",
+      "name": "🟨 Nota 4 - Tools"
+    },
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [-256, 220],
+      "id": "node-tg-trigger",
+      "name": "Telegram Trigger",
+      "webhookId": "s6-asistente-correo-calendario",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEGA_TU_CREDENCIAL_TELEGRAM",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-voice",
+              "leftValue": "={{ $json.message.voice }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-32, 220],
+      "id": "node-if-voz",
+      "name": "¿Es voz?"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [192, 100],
+      "id": "node-tg-getfile",
+      "name": "Obtener voz",
+      "webhookId": "s6-getfile",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEGA_TU_CREDENCIAL_TELEGRAM",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2,
+      "position": [416, 100],
+      "id": "node-whisper",
+      "name": "Whisper",
+      "credentials": {
+        "openAiApi": {
+          "id": "PEGA_TU_CREDENCIAL_OPENAI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "user-message",
+              "name": "userMessage",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "chat-id",
+              "name": "chatId",
+              "value": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+              "type": "number"
+            },
+            {
+              "id": "user-name",
+              "name": "userName",
+              "value": "={{ $('Telegram Trigger').item.json.message.chat.first_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [640, 100],
+      "id": "node-prep-voz",
+      "name": "Preparar Voz"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "user-message-text",
+              "name": "userMessage",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "chat-id-text",
+              "name": "chatId",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "number"
+            },
+            {
+              "id": "user-name-text",
+              "name": "userName",
+              "value": "={{ $json.message.chat.first_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [192, 340],
+      "id": "node-prep-texto",
+      "name": "Preparar Texto"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userMessage }}",
+        "options": {
+          "systemMessage": "=Eres un asistente personal en Telegram. Ayudas a leer y enviar correos, consultar la disponibilidad del calendario y agendar reuniones.\n\nFecha actual: {{ $now.toFormat('yyyy-MM-dd') }}\nHora actual: {{ $now.toFormat('HH:mm') }}\nZona horaria: America/Mexico_City\nUsuario: {{ $json.userName }}\n\nINTERPRETACIÓN DE FECHAS Y HORAS:\n- \"mañana\" = {{ $now.plus({days:1}).toFormat('yyyy-MM-dd') }}\n- \"hoy\" = {{ $now.toFormat('yyyy-MM-dd') }}\n- \"viernes\" = el próximo viernes\n- \"8pm\" = \"20:00\", \"8\" = \"08:00\"\n\nREGLAS (muy importantes):\n1. Si te falta un dato para una acción (destinatario, asunto, fecha, hora...), PREGÚNTALO antes de usar cualquier tool. Nunca inventes correos, asuntos ni horarios.\n2. Antes de agendar una reunión SIEMPRE usa primero la tool consultar_disponibilidad para ese día y propón un horario libre. No agendes encima de algo ya ocupado.\n3. Antes de enviar un correo o de agendar, MUESTRA al usuario lo que vas a hacer (destinatario/asunto/cuerpo, o título/fecha/hora) y pide su confirmación. Solo ejecuta la tool cuando el usuario confirme.\n4. Sé breve y claro.\n\nTOOLS DISPONIBLES:\n- leer_correos: lee correos recientes (cantidad opcional, filtro opcional estilo Gmail, ej. is:unread).\n- enviar_correo: envía un correo (requiere para, asunto, cuerpo). Confirmar antes.\n- consultar_disponibilidad: muestra ocupado/libre de un día (requiere fecha YYYY-MM-DD). Solo lectura.\n- agendar_reunion: crea un evento (requiere titulo, fecha, hora; duracion_minutos opcional). Confirmar antes y consultar disponibilidad primero."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [880, 220],
+      "id": "node-agent",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [640, 460],
+      "id": "node-llm",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "PEGA_TU_CREDENCIAL_OPENAI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.chatId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [800, 460],
+      "id": "node-memory",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "description": "Lee correos recientes. Parámetros opcionales: cantidad (número) y filtro (texto estilo Gmail, por ejemplo is:unread o from:juan@empresa.com).",
+        "workflowId": {
+          "__rl": true,
+          "value": "PEGA_ID_WORKFLOW_LEER_CORREOS",
+          "mode": "list",
+          "cachedResultName": "Tool - Leer Correos"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "cantidad": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('cantidad', ``, 'number') }}",
+            "filtro": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('filtro', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "cantidad", "displayName": "cantidad", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "number" },
+            { "id": "filtro", "displayName": "filtro", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string" }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [680, 600],
+      "id": "node-tool-leer",
+      "name": "leer_correos"
+    },
+    {
+      "parameters": {
+        "description": "Envía un correo. Requiere: para (email destino), asunto y cuerpo. Confirma con el usuario antes de usarla.",
+        "workflowId": {
+          "__rl": true,
+          "value": "PEGA_ID_WORKFLOW_ENVIAR_CORREO",
+          "mode": "list",
+          "cachedResultName": "Tool - Enviar Correo"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "para": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('para', ``, 'string') }}",
+            "asunto": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('asunto', ``, 'string') }}",
+            "cuerpo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('cuerpo', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "para", "displayName": "para", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string" },
+            { "id": "asunto", "displayName": "asunto", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string" },
+            { "id": "cuerpo", "displayName": "cuerpo", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string" }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [820, 600],
+      "id": "node-tool-enviar",
+      "name": "enviar_correo"
+    },
+    {
+      "parameters": {
+        "description": "Consulta la disponibilidad del calendario para un día. Requiere fecha (YYYY-MM-DD). Devuelve horarios ocupados y libres. Solo lectura.",
+        "workflowId": {
+          "__rl": true,
+          "value": "PEGA_ID_WORKFLOW_DISPONIBILIDAD",
+          "mode": "list",
+          "cachedResultName": "Tool - Consultar Disponibilidad"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fecha": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fecha', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "fecha", "displayName": "fecha", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string" }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [960, 600],
+      "id": "node-tool-disp",
+      "name": "consultar_disponibilidad"
+    },
+    {
+      "parameters": {
+        "description": "Agenda una reunión en el calendario. Requiere titulo, fecha (YYYY-MM-DD), hora (HH:mm). duracion_minutos opcional (default 60). Consulta disponibilidad y confirma con el usuario antes de usarla.",
+        "workflowId": {
+          "__rl": true,
+          "value": "PEGA_ID_WORKFLOW_AGENDAR",
+          "mode": "list",
+          "cachedResultName": "Tool - Agendar Reunion"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "titulo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('titulo', ``, 'string') }}",
+            "fecha": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fecha', ``, 'string') }}",
+            "hora": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('hora', ``, 'string') }}",
+            "duracion_minutos": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('duracion_minutos', ``, 'number') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "titulo", "displayName": "titulo", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string" },
+            { "id": "fecha", "displayName": "fecha", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string" },
+            { "id": "hora", "displayName": "hora", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "string" },
+            { "id": "duracion_minutos", "displayName": "duracion_minutos", "required": false, "defaultMatch": false, "display": true, "canBeUsedToMatch": true, "type": "number" }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [1100, 600],
+      "id": "node-tool-agendar",
+      "name": "agendar_reunion"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1280, 220],
+      "id": "node-tg-send",
+      "name": "Enviar Respuesta",
+      "webhookId": "s6-send-respuesta",
+      "credentials": {
+        "telegramApi": {
+          "id": "PEGA_TU_CREDENCIAL_TELEGRAM",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "¿Es voz?", "type": "main", "index": 0 }]]
+    },
+    "¿Es voz?": {
+      "main": [
+        [{ "node": "Obtener voz", "type": "main", "index": 0 }],
+        [{ "node": "Preparar Texto", "type": "main", "index": 0 }]
+      ]
+    },
+    "Obtener voz": {
+      "main": [[{ "node": "Whisper", "type": "main", "index": 0 }]]
+    },
+    "Whisper": {
+      "main": [[{ "node": "Preparar Voz", "type": "main", "index": 0 }]]
+    },
+    "Preparar Voz": {
+      "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]]
+    },
+    "Preparar Texto": {
+      "main": [[{ "node": "AI Agent", "type": "main", "index": 0 }]]
+    },
+    "AI Agent": {
+      "main": [[{ "node": "Enviar Respuesta", "type": "main", "index": 0 }]]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [[{ "node": "AI Agent", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Simple Memory": {
+      "ai_memory": [[{ "node": "AI Agent", "type": "ai_memory", "index": 0 }]]
+    },
+    "leer_correos": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "enviar_correo": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "consultar_disponibilidad": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    },
+    "agendar_reunion": {
+      "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

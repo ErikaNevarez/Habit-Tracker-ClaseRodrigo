@@ -1,0 +1,136 @@
+{
+  "name": "Tool - Consultar Disponibilidad",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "🧩 Sub-agente: Consultar Disponibilidad (Tool)\n\nQué hace:\n- Se ejecuta como *tool* desde el Agente principal.\n- Entrada: `fecha` (YYYY-MM-DD). Si viene vacía, usa HOY.\n- Lee los eventos de ese día y calcula los HUECOS LIBRES dentro del horario laboral (09:00–18:00).\n- Devuelve `resultado` (string): ocupados + libres, para que el agente proponga un horario.\n\nImportante:\n- Esta tool es de SOLO LECTURA. No agenda nada.\n- Para agendar, el agente usa después la tool `agendar_reunion`.\n- Zona horaria fija: America/Mexico_City (offset -06:00).",
+        "height": 300,
+        "width": 560
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-16, 220],
+      "id": "n1-overview-disp",
+      "name": "🟨 Nota - Overview"
+    },
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"fecha\": \"YYYY-MM-DD\"\n}"
+      },
+      "id": "n2-trigger-disp",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [560, 352]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-fecha-disp",
+              "name": "fecha",
+              "value": "={{ $json.fecha || $now.toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "set-timemin",
+              "name": "timeMin",
+              "value": "={{ ($json.fecha || $now.toFormat('yyyy-MM-dd')) }}T00:00:00-06:00",
+              "type": "string"
+            },
+            {
+              "id": "set-timemax",
+              "name": "timeMax",
+              "value": "={{ ($json.fecha || $now.toFormat('yyyy-MM-dd')) }}T23:59:59-06:00",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [784, 352],
+      "id": "n3-preparar-ventana",
+      "name": "Preparar Ventana"
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "TU_CALENDAR_ID@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Mi calendario"
+        },
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{ $json.timeMin }}",
+          "timeMax": "={{ $json.timeMax }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [1008, 352],
+      "id": "n4-calendar-getall",
+      "name": "Obtener Eventos del Día",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PEGA_TU_CREDENCIAL_GOOGLE_CALENDAR",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "eventos",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1232, 352],
+      "id": "n5-agrupar-disp",
+      "name": "Agrupar Eventos"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calcula huecos libres dentro del horario laboral (09:00-18:00)\n// para la fecha consultada, restando los eventos ocupados.\nconst fecha = $('Preparar Ventana').first().json.fecha;\nconst INICIO_LABORAL = 9;   // 9:00\nconst FIN_LABORAL = 18;     // 18:00\n\nconst eventos = ($input.first().json.eventos || [])\n  .filter(e => e && e.start && (e.start.dateTime || e.start.date))\n  .map(e => {\n    const ini = DateTime.fromISO(e.start.dateTime || e.start.date, { zone: 'America/Mexico_City' });\n    const fin = DateTime.fromISO(e.end?.dateTime || e.end?.date || e.start.dateTime || e.start.date, { zone: 'America/Mexico_City' });\n    return { titulo: e.summary || 'Sin título', ini, fin };\n  })\n  .sort((a, b) => a.ini - b.ini);\n\n// Construye lista de huecos libres entre eventos, dentro del horario laboral\nconst libres = [];\nlet cursor = DateTime.fromISO(`${fecha}T${String(INICIO_LABORAL).padStart(2,'0')}:00:00`, { zone: 'America/Mexico_City' });\nconst finDia = DateTime.fromISO(`${fecha}T${String(FIN_LABORAL).padStart(2,'0')}:00:00`, { zone: 'America/Mexico_City' });\n\nfor (const ev of eventos) {\n  if (ev.ini > cursor) {\n    libres.push({ desde: cursor.toFormat('HH:mm'), hasta: ev.ini.toFormat('HH:mm') });\n  }\n  if (ev.fin > cursor) cursor = ev.fin;\n}\nif (cursor < finDia) {\n  libres.push({ desde: cursor.toFormat('HH:mm'), hasta: finDia.toFormat('HH:mm') });\n}\n\nconst ocupadosTxt = eventos.length === 0\n  ? 'Sin eventos ese día.'\n  : eventos.map(e => `• ${e.ini.toFormat('HH:mm')}–${e.fin.toFormat('HH:mm')} ${e.titulo}`).join('\\n');\n\nconst libresTxt = libres.length === 0\n  ? 'No hay huecos libres en horario laboral.'\n  : libres.map(h => `• ${h.desde}–${h.hasta}`).join('\\n');\n\nconst resultado = `📆 Disponibilidad para ${fecha} (horario 09:00–18:00):\\n\\nOcupado:\\n${ocupadosTxt}\\n\\nLibre:\\n${libresTxt}`;\n\nreturn [{ json: { resultado, fecha, libres } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1456, 352],
+      "id": "n6-calcular-huecos",
+      "name": "Calcular Huecos Libres"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [[{ "node": "Preparar Ventana", "type": "main", "index": 0 }]]
+    },
+    "Preparar Ventana": {
+      "main": [[{ "node": "Obtener Eventos del Día", "type": "main", "index": 0 }]]
+    },
+    "Obtener Eventos del Día": {
+      "main": [[{ "node": "Agrupar Eventos", "type": "main", "index": 0 }]]
+    },
+    "Agrupar Eventos": {
+      "main": [[{ "node": "Calcular Huecos Libres", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

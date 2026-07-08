@@ -1,0 +1,86 @@
+{
+  "name": "Tool - Enviar Correo",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "🧩 Sub-agente: Enviar Correo (Tool)\n\nQué hace:\n- Se ejecuta como *tool* desde el Agente principal.\n- Entrada: `para` (email destino), `asunto`, `cuerpo`.\n- Envía el correo con tu cuenta de Gmail y devuelve `resultado` (string) para el agente.\n\nImportante:\n- Acción IRREVERSIBLE: una vez enviado, no se puede recuperar.\n- El agente debe CONFIRMAR con el usuario antes de llamar esta tool (ver system prompt).\n- Aquí NO se escribe a Telegram; solo se regresa texto al agente.",
+        "height": 280,
+        "width": 540
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-16, 288],
+      "id": "n1-overview-enviar",
+      "name": "🟨 Nota - Overview"
+    },
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"para\": \"destino@ejemplo.com\",\n  \"asunto\": \"Asunto del correo\",\n  \"cuerpo\": \"Texto del correo\"\n}"
+      },
+      "id": "n2-trigger-enviar",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [592, 352]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.para }}",
+        "subject": "={{ $json.asunto }}",
+        "emailType": "text",
+        "message": "={{ $json.cuerpo }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [848, 352],
+      "id": "n3-gmail-send",
+      "name": "Enviar Correo",
+      "webhookId": "tool-enviar-correo",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PEGA_TU_CREDENCIAL_GMAIL",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "resultado-enviar",
+              "name": "resultado",
+              "value": "=✅ Correo enviado a {{ $('When Executed by Another Workflow').item.json.para }} con asunto \"{{ $('When Executed by Another Workflow').item.json.asunto }}\".",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1072, 352],
+      "id": "n4-respuesta-enviar",
+      "name": "Respuesta"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [[{ "node": "Enviar Correo", "type": "main", "index": 0 }]]
+    },
+    "Enviar Correo": {
+      "main": [[{ "node": "Respuesta", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
