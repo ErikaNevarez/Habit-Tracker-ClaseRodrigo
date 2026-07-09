@@ -1,6 +1,6 @@
 {
   "name": "Asistente personal",
-  "active": false,
+  "active": true,
   "nodes": [
     {
       "id": "f4fa9d32-3bd8-4be3-b05d-c13deaba83db",
@@ -29,12 +29,18 @@
       }
     },
     {
-      "id": "60698545-619d-442b-a7d8-77b8bcccd72c",
-      "name": "Procesar mensaje de texto",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [688, 432],
-      "parameters": {}
+      "id": "6ff0ff95-44bd-428f-be49-1a42e8781050",
+      "name": "Normalizar Mensaje de Texto",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [912, 432],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": { "assignments": [
+          { "id": "text-field", "name": "text", "value": "={{ $json.message.text || '' }}", "type": "string" }
+        ] }
+      }
     },
     {
       "id": "299b7c07-73df-4370-a7f9-880b3c8b8291",
@@ -43,7 +49,7 @@
       "typeVersion": 1,
       "position": [256, -96],
       "parameters": {
-        "content": "## Filtro voz / no-voz\nEl Telegram Trigger escucha **cualquier mensaje** (texto, voz, foto, etc.).\nEste IF comprueba si `message.voice` **existe** (operador `exists`, no \"is not empty\").\n\n- **TRUE** → es una nota de voz. Rama dejada sin conectar a propósito: en el módulo M03 se le conectará la descarga del audio con `getFile` (manual, sin usar el campo Download del Trigger).\n- **FALSE** → cualquier otro tipo de mensaje. Se normaliza/procesa como texto (nodo No Operation por ahora).",
+        "content": "## Filtro voz / no-voz\nEl Telegram Trigger escucha **cualquier mensaje** (texto, voz, foto, etc.).\nEste IF comprueba si `message.voice` **existe** (operador `exists`, no \"is not empty\").\n\n- **TRUE** → es una nota de voz. Se descarga (Download audio) y se transcribe (Whisper).\n- **FALSE** → cualquier otro tipo de mensaje. \"Normalizar Mensaje de Texto\" toma `message.text` y lo deja en la misma forma `{ text }` que produce Whisper.\n\nAmbos caminos convergen en \"Interpretar Comando\": el mismo pipeline de comandos procesa tanto voz como texto.",
         "height": 328, "width": 520, "color": 5
       }
     },
@@ -97,10 +103,8 @@
       "typeVersion": 1.3,
       "position": [1152, 464],
       "parameters": {
-        "model": { "__rl": true, "mode": "list", "value": "gpt-5-mini", "cachedResultName": "gpt-5-mini" },
-        "builtInTools": {},
-        "options": { "temperature": 0.1 },
-        "responsesApiEnabled": true
+        "model": { "__rl": true, "mode": "list", "value": "gpt-5.4-mini", "cachedResultName": "gpt-5.4-mini" },
+        "options": { "reasoningEffort": "low" }
       }
     },
     {
@@ -339,10 +343,11 @@
     "Escuchar Mensajes de Telegram": { "main": [[{ "node": "¿Es nota de voz?", "type": "main", "index": 0 }]] },
     "¿Es nota de voz?": { "main": [
       [{ "node": "Download audio", "type": "main", "index": 0 }],
-      [{ "node": "Procesar mensaje de texto", "type": "main", "index": 0 }]
+      [{ "node": "Normalizar Mensaje de Texto", "type": "main", "index": 0 }]
     ] },
     "Download audio": { "main": [[{ "node": "Whisper", "type": "main", "index": 0 }]] },
     "Whisper": { "main": [[{ "node": "Interpretar Comando", "type": "main", "index": 0 }]] },
+    "Normalizar Mensaje de Texto": { "main": [[{ "node": "Interpretar Comando", "type": "main", "index": 0 }]] },
     "Modelo de Interpretacion": { "ai_languageModel": [[{ "node": "Interpretar Comando", "type": "ai_languageModel", "index": 0 }]] },
     "Parser de Comando": { "ai_outputParser": [[{ "node": "Interpretar Comando", "type": "ai_outputParser", "index": 0 }]] },
     "Interpretar Comando": { "main": [[{ "node": "Enrutar Accion", "type": "main", "index": 0 }]] },

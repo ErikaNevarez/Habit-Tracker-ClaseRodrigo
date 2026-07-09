@@ -4,7 +4,7 @@
 - Workflow en tu instancia n8n, editado vía MCP oficial de n8n (`create_workflow_from_code` + `update_workflow`).
 - **ID**: `dIfAduLqb46yNpQG`
 - **URL**: https://habit-tracker.oph.st/workflow/dIfAduLqb46yNpQG
-- **Activo**: `false` (borrador, tal como pediste — no se publicó)
+- **Activo**: `true` — **publicado en producción** el 2026-07-09 (`publish_workflow`, `activeVersionId: 4c718c5c-4d7a-4f96-88e0-c5b06d2e3385`), a petición explícita de Erika, después de validar manualmente las 3 acciones por texto. A partir de este punto, cualquier mensaje real al bot de Telegram dispara el workflow solo — ya no hace falta el botón "Execute Workflow" del editor.
 - **Nodos**: 26 (ver detalle por sección abajo)
 
 ## Qué se construyó
@@ -16,12 +16,9 @@
 2. **¿Es nota de voz?** (`n8n-nodes-base.if` v2.3)
    - Condición única: `leftValue = {{ $json.message.voice }}`, `operator = { type: "any", operation: "exists" }` — exactamente `exists`, no "is not empty".
    - Rama **TRUE**: originalmente dejada sin conectar a propósito; ahora conectada a "Download audio" (ver sección M03 abajo).
-   - Rama **FALSE**: conectada a "Procesar mensaje de texto".
+   - Rama **FALSE**: conectada a "Normalizar Mensaje de Texto" (ver sección "Texto entra al mismo pipeline" abajo) — ya NO es un NoOp, se reemplazó.
 
-3. **Procesar mensaje de texto** (`n8n-nodes-base.noOp`)
-   - Nodo No Operation. Representa "se procesa como texto" — sin lógica todavía, listo para expandir cuando toque ese flujo.
-
-4. **Sticky Note** — arriba del Trigger y del IF, explica el filtro voz/no-voz, qué hace cada rama y por qué la rama TRUE queda abierta.
+3. **Sticky Note** — arriba del Trigger y del IF, explica el filtro voz/no-voz y que ambos caminos (voz y texto) convergen en "Interpretar Comando".
 
 ## Verificación hecha
 - `validate_workflow` (MCP) → válido antes de crear.
@@ -64,10 +61,14 @@
 Plan completo guardado en `C:\Users\ekine\.claude\plans\unified-sniffing-thompson.md` (histórico de la sesión).
 
 ### Interpretar Comando (`@n8n/n8n-nodes-langchain.agent` v3.1) + subnodos
-- **Modelo de Interpretación** (`lmChatOpenAi` v1.3, `gpt-5-mini`, `temperature: 0.1`) — conectado vía `ai_languageModel`.
+- **Modelo de Interpretación** (`lmChatOpenAi` v1.3, `gpt-5.4-mini`, `reasoningEffort: 'low'`) — conectado vía `ai_languageModel`.
 - **Parser de Comando** (`outputParserStructured` v1.3, schema manual) — conectado vía `ai_outputParser`. Fuerza el JSON: `{ action, habit_name, frequency, target_per_week }` con `action` restringido por enum a `crear_habito | marcar_hecho | listar_habitos | no_entendido`.
 - El prompt del sistema define reglas de default: `frequency: 'daily'` si no se especifica, `target_per_week: 7` para daily o el número mencionado (1-7) para weekly.
-- **Credencial OpenAI: sigue sin asignar** en este nodo (comparte la misma pendiente de "Whisper" — asígnala en los dos lugares).
+- **Credenciales**: ya asignadas (OpenAI + Supabase creadas por Erika).
+
+#### Bug encontrado y corregido: "Bad request - please check your parameters"
+Al probar con un mensaje de texto, "Interpretar Comando" fallaba con ese error. Causa: el modelo original (`gpt-5-mini`) es de la familia de razonamiento `gpt-5.*`, y esos modelos de OpenAI **rechazan `temperature` distinto al valor por defecto** — el nodo tenía `options.temperature: 0.1` configurado desde el diseño inicial, y OpenAI devolvía 400 al recibirlo.
+**Fix**: se quitó `temperature` y se reemplazó por `reasoningEffort: 'low'` (el parámetro correcto para modelos de razonamiento — favorece velocidad/costo sobre profundidad, apropiado para una clasificación simple). De paso se actualizó el modelo a `gpt-5.4-mini` (la generación vigente recomendada; `gpt-5-mini` seguía siendo válido pero no la más reciente). Verificado que ambos (modelo y ausencia de conflicto de parámetros) quedaron correctos con `get_workflow_details` — 0 warnings.
 
 ### Enrutar Acción (`switch` v3.4, modo rules)
 - 3 reglas por `$json.output.action` (case-insensitive) + fallback `'extra'` renombrado `no_entendido` → índice 3.
@@ -104,13 +105,29 @@ Con la credencial "Supabase account" (`wjwymMFUWXchfk1l`) ya creada, se consult�
 
 No se encontró ningún desajuste — no fue necesario tocar ningún nodo.
 
+## Texto entra al mismo pipeline de comandos
+
+Antes, la rama FALSE del filtro voz/no-voz terminaba en un NoOp ("Procesar mensaje de texto") sin ninguna acción después — un callejón sin salida. Se reemplazó por:
+
+- **Normalizar Mensaje de Texto** (`n8n-nodes-base.set` v3.4, modo manual): toma `message.text` del mensaje de Telegram y produce `{ text: ... }` (con `|| ''` de respaldo si no hay texto, ej. una foto sin caption), exactamente la misma forma que ya produce "Whisper" para las notas de voz.
+- Se conecta directo a **Interpretar Comando** (main), igual que "Whisper". Ahora ese nodo tiene **dos entradas** (fan-in): una desde voz transcrita, otra desde texto normalizado — es un patrón válido en n8n, cada ejecución es independiente, no se duplica lógica de interpretación.
+- Se actualizó el Sticky Note del filtro para reflejar esto (ya no menciona el NoOp).
+
+Con esto, escribir "crea el hábito de leer" como texto en Telegram funciona igual que decirlo por voz — mismo AI Agent, mismo Switch, mismas acciones.
+
+**Pendiente/no cubierto**: si el mensaje de texto no tiene `message.text` (ej. un sticker o una foto sin caption), "Interpretar Comando" recibe `text: ''` y debería clasificarlo como `no_entendido` por las reglas del prompt — no se probó ese caso todavía.
+
 ## Pendiente para ti (módulo de comandos)
 - [x] **Crear credencial Supabase** en n8n — hecho ("Supabase account"), y asignada en los 6 nodos.
 - [x] Verificar que los nombres de tabla/columna de Supabase son correctos — verificado en vivo contra el esquema real (ver arriba), sin discrepancias.
-- [ ] **Asignar credencial OpenAI** en "Modelo de Interpretación" y en "Whisper" — **pausado a propósito**: por ahora no vas a tener la credencial de OpenAI, se retoma más adelante.
-- [ ] Probar las 3 frases ("crea el hábito de X", "hice X hoy" / "marca X como hecho", "qué hábitos tengo") — depende de lo anterior, también pausado.
+- [x] **Asignar credencial OpenAI** — hecho ("OpenAI account"), ya probada con un mensaje de texto real (encontró y corrigió el bug de `temperature`, ver arriba).
+- [x] Probar "crea el hábito de X" de punta a punta — **funcionó**: mensaje de texto "Crea el habito de correr" → Telegram respondió `Habito "correr" creado (daily)`. Confirma todo el camino: Normalizar Mensaje de Texto → Interpretar Comando → Enrutar Acción → Crear Habito en Supabase → Confirmar Habito Creado.
+- [x] Probar "marca X como hecho" / "hice X hoy" — **funcionó**: con "correr" ya creado, Telegram respondió `"correr" marcado como hecho hoy`. Confirma: Buscar Habito por Nombre → Habito Encontrado (TRUE) → Buscar Checkin de Hoy → Checkin Ya Existe (FALSE, primera vez) → Crear Checkin de Hoy → Confirmar Marcado.
+- [x] Probar "qué hábitos tengo" — **funcionó**, y con una frase distinta a los ejemplos del prompt ("habitos de hoy" en vez de "qué hábitos tengo"): Telegram respondió `Tus habitos activos: -correr(daily) -leer 40 min (daily)`. Confirma Listar Habitos Activos → Responder Lista de Habitos, y que el AI Agent generaliza bien más allá de los ejemplos literales del system message.
+- [x] Probar marcar el mismo hábito **dos veces el mismo día** — **funcionó**: verificado con `get_execution` (ejecución #26) que sí tomó la rama "Checkin Ya Existe = TRUE" → "Actualizar Checkin a Hecho" (no "Crear Checkin de Hoy"), sin error de duplicado. Ambas ramas (crear/actualizar checkin) confluyen en el mismo nodo "Confirmar Marcado" con el mismo texto — **decisión confirmada: se deja el mensaje único**, no se diferencia "ya estaba marcado" vs "marcado ahora".
+- [ ] Probar también con una nota de **voz** real (Download audio → Whisper → mismo pipeline) — hasta ahora solo se probó la rama de texto. **Bloqueado**: pendiente hasta que Erika genere el pago/billing de OpenAI (la cuenta tiene la credencial creada, pero sin método de pago activo Whisper no puede facturarse/ejecutarse).
 - [ ] Decidir qué hacer con duplicados al crear hábito (por ahora falla visible, sin mensaje amigable).
-- [ ] Publicar tú mismo cuando esté aprobado (sigue sin activar/publicar).
+- [x] **Publicar el workflow** — hecho: activado a petición explícita de Erika (`publish_workflow`) después de validar las 3 acciones por texto. Ver nota de "Estado" arriba.
 
 ## Incidencia de sesión (contexto, no bloquea nada ahora)
 Antes de poder crear el workflow, hubo que resolver una cadena de problemas de conexión del MCP de n8n:
